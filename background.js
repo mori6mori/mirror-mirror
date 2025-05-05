@@ -1,6 +1,6 @@
 // Define the API key directly in the background script
 // In a production environment, consider more secure approaches
-const PERPLEXITY_API_KEY = "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";
+const PERPLEXITY_API_KEY = "";
 
 // Listen for messages from popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
