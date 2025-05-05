@@ -2,6 +2,26 @@
 // The key is loaded from config file and stored in Chrome's storage API
 let PERPLEXITY_API_KEY = null;
 
+// Initialize cache for storing API results
+let resultsCache = {
+  summaries: {},
+  relatedArticles: {},
+  biasAnalyses: {}
+};
+
+// Load cache from storage
+function loadCache() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['summaryCache', 'articlesCache', 'biasCache'], function(result) {
+      if (result.summaryCache) resultsCache.summaries = result.summaryCache;
+      if (result.articlesCache) resultsCache.relatedArticles = result.articlesCache;
+      if (result.biasCache) resultsCache.biasAnalyses = result.biasCache;
+      console.log('Cache loaded from storage');
+      resolve();
+    });
+  });
+}
+
 // Import configuration from local config file
 // Using dynamic import for better compatibility
 async function loadConfig() {
@@ -68,8 +88,9 @@ function initializeApiKey() {
   });
 }
 
-// Initialize the API key when the extension loads
+// Initialize the API key and cache when the extension loads
 initializeApiKey();
+loadCache();
 
 // Listen for messages from popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -129,6 +150,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function summarizeArticle(articleInfo) {
   try {
+    // Generate a cache key based on the article URL or title
+    const cacheKey = articleInfo.url || articleInfo.title;
+    
+    // Check if we have a cached summary for this article
+    if (resultsCache.summaries[cacheKey]) {
+      console.log('Using cached summary for:', cacheKey);
+      return resultsCache.summaries[cacheKey];
+    }
+    
     // Ensure API key is initialized before making the request
     if (!PERPLEXITY_API_KEY) {
       // Try to load from config first
@@ -169,6 +199,15 @@ async function summarizeArticle(articleInfo) {
     
     // Extract the summary from the response
     const summary = data.choices[0].message.content;
+    
+    // Cache the summary
+    resultsCache.summaries[cacheKey] = summary;
+    
+    // Save to storage
+    chrome.storage.local.set({
+      'summaryCache': resultsCache.summaries
+    });
+    
     return summary;
   } catch (error) {
     console.error('Error summarizing article:', error);
@@ -178,6 +217,15 @@ async function summarizeArticle(articleInfo) {
 
 async function findRelatedArticles(articleInfo, summary, attempt = 1, maxAttempts = 3) {
   try {
+    // Generate a cache key based on the article URL or title
+    const cacheKey = articleInfo.url || articleInfo.title;
+    
+    // Check if we have cached related articles for this article
+    if (resultsCache.relatedArticles[cacheKey] && attempt === 1) {
+      console.log('Using cached related articles for:', cacheKey);
+      return resultsCache.relatedArticles[cacheKey];
+    }
+    
     // Ensure API key is initialized before making the request
     if (!PERPLEXITY_API_KEY) {
       // Try to load from config first
@@ -267,8 +315,17 @@ async function findRelatedArticles(articleInfo, summary, attempt = 1, maxAttempt
       return findRelatedArticles(articleInfo, summary, attempt + 1, maxAttempts);
     }
     
-    // If we found at least one article, return the results
+    // If we found at least one article, cache and return the results
     if (articles && articles.length > 0) {
+      // Only cache successful results from the first attempt
+      if (attempt === 1) {
+        resultsCache.relatedArticles[cacheKey] = relatedArticles;
+        
+        // Save to storage
+        chrome.storage.local.set({
+          'articlesCache': resultsCache.relatedArticles
+        });
+      }
       return relatedArticles;
     }
     

@@ -64,6 +64,9 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="article-source">Current page: <a href="${articleInfo.url}" target="_blank">${new URL(articleInfo.url).hostname}</a></div>
     `;
     
+    // Display the page classification info
+    displayPageClassification(articleInfo.pageClassification);
+    
     // First, get a summary of the article
     chrome.runtime.sendMessage(
       {
@@ -115,6 +118,47 @@ document.addEventListener('DOMContentLoaded', function() {
     currentArticleDiv.innerHTML = `<div class="error">${message}</div>`;
     summaryDiv.innerHTML = '';
     relatedArticlesDiv.innerHTML = '';
+  }
+  
+  function displayPageClassification(classification) {
+    const contentTypeDiv = document.getElementById('content-type');
+    
+    if (!classification) {
+      contentTypeDiv.innerHTML = `<div>Unable to classify content</div>`;
+      return;
+    }
+    
+    // Get the main type and subtype
+    const type = classification.type || 'unknown';
+    const subtype = classification.subtype || '';
+    const confidence = classification.confidence || 0;
+    
+    // Format the type for display
+    const formattedType = type.charAt(0).toUpperCase() + type.slice(1);
+    const formattedSubtype = subtype ? ` (${subtype})` : '';
+    
+    // Create the HTML for the content type display
+    let html = `
+      <div>
+        <span class="content-type-badge type-${type}">${formattedType}${formattedSubtype}</span>
+      </div>
+    `;
+    
+    // Details section removed as requested
+    // Uncomment if you want to display metadata details again
+    /*
+    if (classification.details && Object.keys(classification.details).length > 0) {
+      html += `<div class="classification-details" style="font-size: 0.8em; margin-top: 8px; color: #666;">`;
+      
+      for (const [key, value] of Object.entries(classification.details)) {
+        html += `<div>${key}: ${value}</div>`;
+      }
+      
+      html += `</div>`;
+    }
+    */
+    
+    contentTypeDiv.innerHTML = html;
   }
   
   function displayRelatedArticles(data) {
