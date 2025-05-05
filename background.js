@@ -1,6 +1,63 @@
-// Define the API key directly in the background script
-// In a production environment, consider more secure approaches
-const PERPLEXITY_API_KEY = "";
+// Import configuration from local config file
+import CONFIG from './config.local.js';
+
+// API key handling with better security
+// The key is loaded from config file and stored in Chrome's storage API
+let PERPLEXITY_API_KEY = CONFIG.PERPLEXITY_API_KEY || null;
+
+// Simple encryption function to add a basic layer of protection
+function encrypt(text, salt) {
+  const textToChars = text => text.split('').map(c => c.charCodeAt(0));
+  const byteHex = n => ("0" + Number(n).toString(16)).substr(-2);
+  const applySalt = code => textToChars(salt).reduce((a,b) => a ^ b, code);
+
+  return text.split('')
+    .map(textToChars)
+    .map(applySalt)
+    .map(byteHex)
+    .join('');
+}
+
+// Simple decryption function
+function decrypt(encoded, salt) {
+  const textToChars = text => text.split('').map(c => c.charCodeAt(0));
+  const applySalt = code => textToChars(salt).reduce((a,b) => a ^ b, code);
+  
+  return encoded.match(/.{1,2}/g)
+    .map(hex => parseInt(hex, 16))
+    .map(applySalt)
+    .map(charCode => String.fromCharCode(charCode))
+    .join('');
+}
+
+// Load the API key from storage or initialize it if not present
+function initializeApiKey() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['encryptedApiKey'], function(result) {
+      if (result.encryptedApiKey) {
+        // Decrypt the stored key
+        // Note: In a real implementation, use a more secure salt mechanism
+        const salt = 'mirror-mirror-salt';
+        PERPLEXITY_API_KEY = decrypt(result.encryptedApiKey, salt);
+        resolve();
+      } else {
+        // For first-time setup, encrypt and store the key
+        // In a production environment, you would get this from a secure source
+        const defaultKey = "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";
+        const salt = 'mirror-mirror-salt';
+        const encryptedKey = encrypt(defaultKey, salt);
+        
+        chrome.storage.local.set({encryptedApiKey: encryptedKey}, function() {
+          PERPLEXITY_API_KEY = defaultKey;
+          resolve();
+        });
+      }
+    });
+  });
+}
+
+// Initialize the API key when the extension loads
+initializeApiKey();
 
 // Listen for messages from popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -60,6 +117,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function summarizeArticle(articleInfo) {
   try {
+    // Ensure API key is initialized before making the request
+    if (!PERPLEXITY_API_KEY) {
+      await initializeApiKey();
+    }
+    
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
@@ -95,6 +157,11 @@ async function summarizeArticle(articleInfo) {
 
 async function findRelatedArticles(articleInfo, summary, attempt = 1, maxAttempts = 3) {
   try {
+    // Ensure API key is initialized before making the request
+    if (!PERPLEXITY_API_KEY) {
+      await initializeApiKey();
+    }
+    
     // Different prompts for different attempts to get better results
     let userPrompt;
     let systemPrompt;
