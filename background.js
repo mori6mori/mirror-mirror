@@ -1,9 +1,21 @@
-// Import configuration from local config file
-import CONFIG from './config.local.js';
-
 // API key handling with better security
 // The key is loaded from config file and stored in Chrome's storage API
-let PERPLEXITY_API_KEY = CONFIG.PERPLEXITY_API_KEY || null;
+let PERPLEXITY_API_KEY = null;
+
+// Import configuration from local config file
+// Using dynamic import for better compatibility
+async function loadConfig() {
+  try {
+    const config = await import('./config.local.js');
+    PERPLEXITY_API_KEY = config.default.PERPLEXITY_API_KEY || null;
+    console.log('API key loaded from config');
+  } catch (error) {
+    console.error('Error loading config:', error);
+  }
+}
+
+// Load the config when the extension starts
+loadConfig();
 
 // Simple encryption function to add a basic layer of protection
 function encrypt(text, salt) {
@@ -119,7 +131,16 @@ async function summarizeArticle(articleInfo) {
   try {
     // Ensure API key is initialized before making the request
     if (!PERPLEXITY_API_KEY) {
-      await initializeApiKey();
+      // Try to load from config first
+      await loadConfig();
+      
+      // If still not available, try to load from storage
+      if (!PERPLEXITY_API_KEY) {
+        const hasKey = await initializeApiKey();
+        if (!hasKey) {
+          throw new Error('API key not found. Please set your API key in the extension options.');
+        }
+      }
     }
     
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -159,7 +180,16 @@ async function findRelatedArticles(articleInfo, summary, attempt = 1, maxAttempt
   try {
     // Ensure API key is initialized before making the request
     if (!PERPLEXITY_API_KEY) {
-      await initializeApiKey();
+      // Try to load from config first
+      await loadConfig();
+      
+      // If still not available, try to load from storage
+      if (!PERPLEXITY_API_KEY) {
+        const hasKey = await initializeApiKey();
+        if (!hasKey) {
+          throw new Error('API key not found. Please set your API key in the extension options.');
+        }
+      }
     }
     
     // Different prompts for different attempts to get better results
