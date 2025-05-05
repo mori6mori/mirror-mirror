@@ -77,8 +77,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="summary-content">${summaryResponse.summary}</div>
           `;
           
-          // Now analyze the bias
-          analyzeBias(articleInfo, summaryResponse.summary);
+          // Skip bias analysis since it's been disabled in the UI
+          // analyzeBias(articleInfo, summaryResponse.summary);
           
           // Now, find related articles using the summary
           chrome.runtime.sendMessage(
